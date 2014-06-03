@@ -9,6 +9,8 @@ This is a library as well as a test GUI that I wrote that implements the RTSP Si
 
 * Version 1.0 - June 3rd, 2014 - Initial Creation
 
+# Synopsis
+
 This library is written in Java.  There are two classes associated with this repo:
 
 1. `RTSPControl` - The RTSP Protocol class that communicates with the server that establishes a connection, and eventually get media packets for the data file that we want.
