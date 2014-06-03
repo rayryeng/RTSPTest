@@ -3,6 +3,12 @@ RTSPTest
 
 This is a library as well as a test GUI that I wrote that implements the RTSP Signalling Protocol to communicate with RTSP servers
 
+## Author: Raymond Phan
+
+## Version History
+
+* Version 1.0 - June 3rd, 2014 - Initial Creation
+
 This library is written in Java.  There are two classes associated with this repo:
 
 1. `RTSPControl` - The RTSP Protocol class that communicates with the server that establishes a connection, and eventually get media packets for the data file that we want.
@@ -266,3 +272,7 @@ Once you run it, you will be provided with a simple interface where you can ente
 # References
 
 This link was an invaluable resource: http://folk.uio.no/meccano/reflector/smallclient.html.  This code was also based on a very popular RTP/RTSP streaming assignment which can be found here: http://www.csee.umbc.edu/~pmundur/courses/CMSC691C/lab5-kurose-ross.html.  The full solution to this assignment can be found here: https://github.com/sjbarag/ECE-C433/tree/master/proj3.
+
+# Permissions
+
+This code is protected by the MIT License.  As such, you may use this code in any products you are developing, whether it be open or closed source to your heart's content.  A copy of the license is included with this repo.  The only thing I request is that you acknowledge me if you decide to use this library for your application.  Thanks, and have fun!
