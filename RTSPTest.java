@@ -87,9 +87,12 @@ public class RTSPTest implements ActionListener{
 		// Add listener so that we quit we close the window
 	    mainFrame.addWindowListener(new WindowAdapter() {
 	        public void windowClosing(WindowEvent e) {
+	        	// Teardown the connection when we close the window
+	        	if (rtspControl != null)
+	        		rtspControl.RTSPTeardown();
 	        	System.exit(0);
 	        }
-	     });		
+	     });	
 
 		// Set up connection to default RTSP url before we even show GUI
 		hostName = "184.72.239.149";
