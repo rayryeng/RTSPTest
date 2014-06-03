@@ -5,12 +5,12 @@ This is a library as well as a test GUI that I wrote that implements the RTSP Si
 
 This library is written in Java.  There are two classes associated with this repo:
 
-1. RTSPControl - The RTSP Protocol class that communicates with the server that establishes a connection, and eventually get media packets for the data file that we want.
-2. RTSP Test - A simple Java Swing application that allows you to enter in a RTSP URL as well as push buttons that allow you to communicate with the server.
+1. `RTSPControl` - The RTSP Protocol class that communicates with the server that establishes a connection, and eventually get media packets for the data file that we want.
+2. `RTSPTest` - A simple Java Swing application that allows you to enter in a RTSP URL as well as push buttons that allow you to communicate with the server.
 
 # Introduction
 
-The Real-Time Streaming Protocol (RTSP) is a method to issue commands to a server that implements the Real-Time Protocol (RTP).  An RTP server sends data over to a receiving data in a particular format dictated by the RTP protocol.  As such, RTSP is primarily used to communicate the wishes of the user / device, such as play, pause, teardown, setup and so on.  Once the setup is complete and a play command is issued, the server thus sends the relevant data using RTP to the device.
+The Real-Time Streaming Protocol (RTSP) is a method to issue commands to a server that implements the Real-Time Protocol (RTP).  An RTP server sends data over to a receiving entity in a particular format dictated by the RTP protocol.  As such, RTSP is primarily used to communicate the wishes of the user / device, such as play, pause, teardown, setup and so on.  Once the setup is complete and a play command is issued, the server thus sends the relevant data using RTP to the device.
 
 As such, this is code that was written that implements the RTSP protocol to communicate with servers that stream data to devices via the RTP protocol.  In order to connect to an RTSP server, the URL is in the following format:
 
@@ -20,7 +20,7 @@ As such, this is code that was written that implements the RTSP protocol to comm
 
     rtsp://184.72.239.149/vod/mp4:BigBuckBunny_115k.mov
 
-As such, the IP address is `184.72.239.149`, there is no port specified, so the default is 554.  The video we wish to play is stored in `vod/mp4:BigBuckBunny_115k.mov`.  Bear in mind that the `:` is not a valid character to use in all operating systems in terms of directory structure.  However, Wowza has their own parsing scheme using `:` that will inevitably determine where the exact file is.  As such, it is paramount that you know how exactly to get to the media you want by knowing how to correctly structure the `pathToFileToPlay`.
+As such, the IP address is `184.72.239.149`, there is no port specified, so the default is `554`.  The video we wish to play is stored in `vod/mp4:BigBuckBunny_115k.mov`.  Bear in mind that the `:` is not a valid character to use in all operating systems in terms of directory structure.  However, Wowza has their own parsing scheme using `:` that will inevitably determine where the exact file is.  As such, it is paramount that you know how exactly to get to the media you want by knowing how to correctly structure the `pathToFileToPlay`.
 
 # Basic RTSP Actions
 
@@ -68,7 +68,7 @@ The purpose of `DESCRIBE` is to be able to *describe* the information about the 
     a=framerate:24.0
     a=control:trackID=2
 
-Basically, the first chunk of text gives you information about when you have accessed the data as well as some general information about it.  What is important is the very first line: `RTSP/1.0 200 OK`.  A server response code of `200` means that everything is working fine.  Anything else you should consider it as being an error.  The second chunk of text gives you information about the media you are trying to access.  What is important are the `m=video` and `m=audio` tags.  What follows each of these tags are information about the audio or video data within the content you are trying to stream.  As you can see, the video stanard used for the content is H.264, while the audio is MP4.  It is also important to see that where the tags `a=control` are, this tells you the `trackID` or basically which "channel" we need to access either the audio or video data.  More information about the SDP protocol can [be found here](http://en.wikipedia.org/wiki/Session_Description_Protocol).
+Basically, the first chunk of text gives you information about when you have accessed the data as well as some general information about it.  What is important is the very first line: `RTSP/1.0 200 OK`.  A server response code of `200` means that everything is working fine.  Anything else you should consider it as being an error.  The second chunk of text gives you information about the media you are trying to access.  What is important are the `m=video` and `m=audio` tags.  What follows each of these tags are information about the audio or video data within the content you are trying to stream.  As you can see, the video standard used for the content is H.264, while the audio is MP4.  It is also important to see that where the tags `a=control` are, this tells you the `trackID` or basically which "channel" we need to access either the audio or video data.  More information about the SDP protocol can [be found here](http://en.wikipedia.org/wiki/Session_Description_Protocol).  There is more important information about the video and audio tracks, but the current implementation does not extract this information.   On future versions, this information will inevitably be extracted to allow for actual media playback.
 
 ## OPTIONS
 
@@ -234,7 +234,7 @@ Bear in mind that once you issue a `TEARDOWN` request, you need to reset the `CS
 
 In the first method, `rtspURL` is a string that is in the format of: `rtsp://address.of.server:port/pathToFileToPlay`, like we talked about earlier.  In this case, you would do: `rtspURL = rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov`.  In the second method, you can specify the IP/Hostname of the RTSP server, the RTSP port and the path to the video file manually.  `rtspHost` and `videoFile` are strings, while `rtspPort` is an integer.  In this case, you would do: `new RTSPControl("184.72.239.149", 554, "vod/mp4:BigBuckBunny_115k.mov);`.  By specifying `-1` as the server port, this automatically defaults to `554`.
 
-Once you have this established, you can call your standard RTSP server commands:
+Once you have this established, the Datagram Socket connection is all done underneath the hood.  After the constructor, you can call your standard RTSP server commands:
 
 * `RTSPDescribe()`: Issues a `DESCRIBE` command to the server
 * `RTSPOptions()`: Issues an `OPTIONS` command to the server
