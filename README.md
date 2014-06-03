@@ -180,20 +180,22 @@ The `OPTIONS` command looks like the following.  You can do either `DESCRIBE` or
     OPTIONS rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n
     CSeq: 2\r\n
     Session: 1234567890\r\n
+    \r\n
     
 ## SETUP
 
 The `SETUP` command looks like the following.  Bear in mind that we must issue a command **per media track** for setting up (i.e. one for video and one for audio).
 
-    SETUP rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=1 RTSP/1.0
-    CSeq: 3
-    Session: 1234567890
-    Transport: RTP/AVP;unicast;client_port=9000-9001
-
-    SETUP rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=2 RTSP/1.0
-    CSeq: 4
-    Session: 1234567890
-    Transport: RTP/AVP;unicast;client_port=9000-9001
+    SETUP rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=1 RTSP/1.0\r\n
+    CSeq: 3\r\n
+    Session: 1234567890\r\n
+    Transport: RTP/AVP;unicast;client_port=9000-9001\r\n
+    \r\n
+    SETUP rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=2 RTSP/1.0\r\n
+    CSeq: 4\r\n
+    Session: 1234567890\r\n
+    Transport: RTP/AVP;unicast;client_port=9000-9001\r\n
+    \r\n
 
 The `Transport` field is important, as it tells the server what kind of protocol the server should be streaming with (RTP of course), as well as where we will want to receive incoming media data, specified in this part of the string (recall the Port 9000 and 9001 that was mentioned earlier).  We usually set the mode to `unicast`, signifying that the stream will only be broadcast to **one device**.  Multicast options are possible, but the server must support it.  What this means is that with one single audio/video stream, it can be replicated to many more devices than just a single one.  This is not supported by most RTSP servers, and so `unicast` is always the safest mode to use.
 
@@ -201,9 +203,10 @@ The `Transport` field is important, as it tells the server what kind of protocol
 
 The `PLAY` command looks like this, once we have finished `SETUP`:
 
-    PLAY rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
-    CSeq: 5
-    Session: 1234567890
+    PLAY rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n
+    CSeq: 5\r\n
+    Session: 1234567890\r\n
+    \r\n
     
 Starting to look the same isn't it?  As you can see so far, most of the commands follow the same structure.  The main difference is the command issued at the beginning of the first string.
 
@@ -211,17 +214,19 @@ Starting to look the same isn't it?  As you can see so far, most of the commands
 
 The `PAUSE` command looks like this, assuming that `PLAY` was issued before:
 
-    PAUSE rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
-    CSeq: 6
-    Session: 1234567890
+    PAUSE rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n
+    CSeq: 6\r\n
+    Session: 1234567890\r\n
+    \r\n
     
 ## TEARDOWN
 
 A `TEARDOWN` command looks like this, assuming that we are either in `PLAY` or `PAUSE`:
 
-    TEARDOWN rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
-    CSeq: 7
-    Session: 1234567890
+    TEARDOWN rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n
+    CSeq: 7\r\n
+    Session: 1234567890\r\n
+    \r\n
     
 Bear in mind that once you issue a `TEARDOWN` request, you need to reset the `CSeq` counter so that it starts at 1.
 
