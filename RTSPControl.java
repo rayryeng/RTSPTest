@@ -15,7 +15,6 @@ import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.TimerTask;
 
-// Test application that communicates with 
 public class RTSPControl {
 	// RTP Variables
 	
@@ -28,6 +27,7 @@ public class RTSPControl {
 	
 	// Timer used to receive data from the UDP socket
 	Timer timer = null;
+	Timer timerOptions = null; 
 	
 	// Buffer to receive the data
 	byte[] buf = null;
@@ -69,7 +69,11 @@ public class RTSPControl {
 	// Sequence number of RTSP messages within the session
 	// Initially set to zero
 	private int RTSPSeqNb = 0;
-	private int RTSPSessionID = 0; // ID of RTSP sessions - given by RTSP server
+	
+	// Changed this to a string instead of an int
+	// as the actual RTSP server I'm testing on issues sessions
+	// in alphanumeric characters.  Leave this as a string to be safe
+	private String RTSPSessionID = null; // ID of RTSP sessions - given by RTSP server
 	
 	// Carriage return and new line to send to server
 	private final String CRLF = "\r\n";
@@ -89,6 +93,13 @@ public class RTSPControl {
 	private int audioTrackID = -1;
 	private int videoTrackID = -1;
 	
+	// Store the audio and video payload types
+	// We will need this to figure out what data is being sent
+	// from the server
+	private int audioPT = -1;
+	private int videoPT = -1;
+	
+	// Flags that tell us whether SETUP using video and audio are finished
 	private boolean videoSetupDone = false;
 	private boolean audioSetupDone = false;
 	
@@ -100,8 +111,24 @@ public class RTSPControl {
 	// The total number of tracks
 	private int numberOfTracks = 0;
 	
-	// For our byte to hex conversion routine
-	final char[] hexArray = "0123456789ABCDEF".toCharArray();
+	// Boolean flag that tells us whether or not the ID of the track
+	// is referenced by the key "trackID=" or "stream="
+	// GStreamer has it as the latter, while conventional RTSP servers
+	// have it as the former
+	boolean trackIDOrStream = true;
+	
+	// Variables that define the periodic options request sent to the
+	// RTSP server
+	// In order to prevent a time out, it's good to periodically send
+	// something to the server to let you know that you're still here
+	// You can do this very innocuously with an OPTIONS request
+	// As such, every 45 seconds we send an OPTIONS request to let
+	// the server know we're still here
+	// We will also start the timer at about 15 seconds after we schedule
+	// the task to ensure no conflicts
+	private final int TIMEROPTIONSDELAY = 15000;
+	private final int TIMEROPTIONSFREQUENCY = 45000;
+
 	// Constructor
 	// serverHost - Alphabetical URL or IP Address
 	// etc. www.bublcam.com or 192.168.0.100
@@ -140,21 +167,48 @@ public class RTSPControl {
         String temp = "rtsp://";
         int locOfRtsp = rtspURL.indexOf(temp);
         
+        // Throw exception if rtsp:// is not accompanied with the URL
         if (locOfRtsp == -1) 
         	throw new IllegalArgumentException("Must give URL that begins with rtsp://");
         
+        // Obtain a string excluding the "rtsp://" bit
         String parsedURL = rtspURL.substring(locOfRtsp + temp.length());
-        this.hostName = parsedURL.substring(0, parsedURL.indexOf("/"));	
+        
+        // Extract the IP with the port address if possible 
+        // You also need to make sure that there is a **video file** we need to play
+        // This means that there should be a slash that follows it.
+        int indexOfSlash = parsedURL.indexOf("/");
+        String hostnameTemp;
+        if (indexOfSlash != -1)
+        	hostnameTemp = parsedURL.substring(0, indexOfSlash);
+        else
+        	throw new IllegalArgumentException("RTSP URL must end with a slash (/)");
         
         // Check to see if there is a port specified.  If there isn't,
         // assume default part
-        if (hostName.indexOf(':') != -1)
-        	this.serverPort = Integer.parseInt(hostName.substring(hostName.indexOf(':') + 1));
-        else
-        	this.serverPort = 554;	        
+        int indexOfColon = hostnameTemp.indexOf(':');
+        if (indexOfColon != -1) {
+        	// Get the IP / DNS without the ':'
+        	this.hostName = hostnameTemp.substring(0, indexOfColon);
+        	
+        	// Get the port number that is after the colon
+        	try {
+        		this.serverPort = Integer.parseInt(hostnameTemp.substring(hostnameTemp.indexOf(':') + 1));
+        	} catch (NumberFormatException nfe) {
+        		throw new IllegalArgumentException("Error: Port number is not a number");
+        	}
+        }
+        else {
+        	this.hostName = hostnameTemp;
+        	this.serverPort = 554;
+        }
         
         // Get the video file name now
-        videoFile = parsedURL.substring(parsedURL.indexOf("/") + 1);
+        // If none is provided, this is null
+        if (indexOfSlash + 1 > parsedURL.length())
+        	videoFile = null;
+        else
+        	videoFile = parsedURL.substring(indexOfSlash + 1);
         
 		isSetup = false;
 		setUpConnectionAndParameters();
@@ -169,7 +223,10 @@ public class RTSPControl {
 	}
 	
 	public String getVideoFilename() {
-		return new String(videoFile);
+		if (this.videoFile != null)
+			return new String(videoFile);
+		else
+			return null;
 	}
 	
 	
@@ -213,12 +270,21 @@ public class RTSPControl {
 		// Initialize parameters
 		audioTrackID = -1;
 		videoTrackID = -1;
-		RTSPSessionID = -1;
+		audioPT = -1;
+		videoPT = -1;
+		RTSPSessionID = null;
 		numberOfTracks = 0;	
 		isSetup = true;
 		RTPsocket = null;
 		videoSetupDone = false;
 		videoSetupDone = false;
+		
+		timerOptions = new Timer();
+		// Start an Options timer that incrementally sends a request every so often
+		// This prevents the server from disconnecting
+		// Delay by two seconds to ensure no conflicts in re-establishing connection		
+		timerOptions.scheduleAtFixedRate(new RTSPOptionsTimerTask(), TIMEROPTIONSDELAY, 
+				TIMEROPTIONSFREQUENCY);		
 	}
 	
 	// Integer code - 0 for no more setup calls required
@@ -234,6 +300,10 @@ public class RTSPControl {
 			System.out.println("No tracks to set up!");
 			return 0;
 		}
+		
+		// Cancel the options timer request while we do this
+		if (timerOptions != null)
+			timerOptions.cancel();
 				
 		// Increment RTSP sequence number
 		RTSPSeqNb++;
@@ -274,6 +344,11 @@ public class RTSPControl {
 					}
 				}
 			}
+			
+			// Restart Options timer
+			timerOptions = new Timer();	
+			timerOptions.scheduleAtFixedRate(new RTSPOptionsTimerTask(), TIMEROPTIONSDELAY, 
+					TIMEROPTIONSFREQUENCY);			
 			return numberOfTracks;
 		}
 	}
@@ -283,6 +358,10 @@ public class RTSPControl {
 			System.out.println("Client has not sent Setup Request yet");
 			return;
 		}
+		
+		// Cancel Options timer while we pull the response from the server
+		if (timerOptions != null)
+			timerOptions.cancel();
 		
 		// Increase the RTSP sequence number - This is the
 		// next command to issue
@@ -312,15 +391,22 @@ public class RTSPControl {
 			// Initialize timer to receive events from server
 			timer = new Timer();
 			// Start it now, with 20 millisecond intervals
-			timer.scheduleAtFixedRate(new RTSPTimerTask(), 0, 20);			
+			timer.scheduleAtFixedRate(new RTSPTimerTask(), 0, 20);	
 		}
+		
+		// Restart Options timer event
+		// Even if we are playing content, we still need to keep our
+		// connection alive
+		timerOptions = new Timer();
+		timerOptions.scheduleAtFixedRate(new RTSPOptionsTimerTask(), TIMEROPTIONSDELAY, 
+				TIMEROPTIONSFREQUENCY);			
 	}
 	
 	public void RTSPPause() {
 		if (state != RTSPState.PLAYING) {
 			System.out.println("Client is not playing content right now");
 			return;
-		}
+		}	
 		
 		// Increase the RTSP sequence number
 		RTSPSeqNb++;
@@ -336,9 +422,18 @@ public class RTSPControl {
 			System.out.println("Pausing playback - Cancelling Timer event");
 			timer.cancel();
 		}
+		
+		// Restart Options timer while we are paused
+		// Notice that we don't cancel this timer as this was already done in
+		// PLAY
+		timerOptions = new Timer();	
+		timerOptions.scheduleAtFixedRate(new RTSPOptionsTimerTask(), TIMEROPTIONSDELAY, 
+				TIMEROPTIONSFREQUENCY);			
 	}
 	
 	public void RTSPTeardown() {
+		// You can only call TEARDOWN after the connections have been set up,
+		// or if you are playing content
 		if (state == RTSPState.INIT) {
 			System.out.println("Client is in initialize stage - No need to teardown");
 			return;
@@ -355,41 +450,59 @@ public class RTSPControl {
 			System.out.println("Invalid Server Response");
 		else {
 			System.out.println("Teardown - Changing Client state back to INIT");
-			state = RTSPState.INIT;
 			
-			// Stop the timer event as well
-			if (timer != null) {
-				timer.cancel();	
-				timer = null;
-			}
-			
-			// Reset sequence number
-			RTSPSeqNb = 0;
-			
-			// Reset all other parameters
-			audioTrackID = -1;
-			videoTrackID = -1;
-			RTSPSessionID = -1;
-			numberOfTracks = 0;		
-			isSetup = false;
-			buf = null;
-			if (!RTPsocket.isClosed())
-				RTPsocket.close();
-			RTPsocket = null;
-			videoSetupDone = false;
-			audioSetupDone = false;
+			// Reset all parameters
+			resetParameters();				
 		}			
 	}
 	
-	// Send a request to see what the options are
-	public void RTSPOptions() {
-		if (state != RTSPState.INIT) {
-			System.out.println("Must be in INIT stage before requesting Options");
-			return;
+	public void resetParameters() {
+		state = RTSPState.INIT;
+		
+		// Reset sequence number
+		RTSPSeqNb = 0;
+		
+		// Reset all other parameters
+		audioTrackID = -1;
+		videoTrackID = -1;
+		audioPT = -1;
+		videoPT = -1;
+		RTSPSessionID = null;
+		numberOfTracks = 0;		
+		isSetup = false;
+		buf = null;			
+		videoSetupDone = false;
+		audioSetupDone = false;
+		
+		// Cancel all timing events if Teardown option is executed
+		if (timer != null) {
+			timer.cancel();	
+			timer = null;
 		}
 		
+		if (timerOptions != null) {
+			timerOptions.cancel();
+			timerOptions = null;
+		}
+		
+		// Close connection as well
+		if (RTPsocket != null && !RTPsocket.isClosed()) {
+			RTPsocket.close();
+			RTPsocket = null;
+		}		
+	}
+
+	// Send a request to see what the options are
+	public void RTSPOptions() {
+		// Remove because we would like to send an OPTIONS request no matter what
+		// state we are in
+		//if (state != RTSPState.INIT) {
+		//	System.out.println("Must be in INIT stage before requesting Options");
+		//	return;
+		//}
+		
 		if (!isSetup)
-			setUpConnectionAndParameters();
+			setUpConnectionAndParameters();	
 		
 		// Increase RTSP Sequence Number
 		RTSPSeqNb++;
@@ -403,7 +516,7 @@ public class RTSPControl {
 		else {
 			System.out.println("Options Request succeeded");
 			// We don't need to change the state
-		}
+		}				
 	}
 	
 	// Send a request for DESCRIBING what is available
@@ -415,6 +528,10 @@ public class RTSPControl {
 		
 		if (!isSetup)
 			setUpConnectionAndParameters();
+		
+		// Cancel Options timer while we pull this information
+		if (timerOptions != null)
+			timerOptions.cancel();		
 		
 		// Increase RTSP Sequence Number
 		RTSPSeqNb++;
@@ -429,6 +546,11 @@ public class RTSPControl {
 			System.out.println("Describe Request succeeded");
 			// We don't need to change the state
 		}
+		
+		// Restart Options timer
+		timerOptions = new Timer();	
+		timerOptions.scheduleAtFixedRate(new RTSPOptionsTimerTask(), TIMEROPTIONSDELAY, 
+				TIMEROPTIONSFREQUENCY);			
 	}
 	
 	// Goes through the received string from the server
@@ -498,13 +620,23 @@ public class RTSPControl {
 						// into our decoder buffers
 						
 						// Usually looks like this:
-						// m=audio num RTP/AVP num2
+						// m=audio num RTP/AVP PT
 						// or
-						// m=video num RTP/AVP num2
+						// m=video num RTP/AVP PT
+						// PT is the payload type or the type of media that is represented
+						// for the audio or video (i.e. audio: MP4, MP3, etc., video: 
+						// H264, MPEG1, etc.)
 						if (part.equals("m=audio") && audioTrackID == -1) { // begin if2
 							// Skip next token
 							tokens.nextToken();
+							
+							// Obtain the streaming protocol for the Audio
+							// Usually RTP/AVP
 							streamingProtocolAudio = new String(tokens.nextToken());
+							
+							// Next token should contain our payload type
+							audioPT = Integer.parseInt(tokens.nextToken());
+							System.out.println("*** Audio PT: " + audioPT);
 							
 							// Now advance each line until we hit "a=control"
 							while (true) { // begin while2
@@ -525,7 +657,17 @@ public class RTSPControl {
 							controlTokens.nextToken();
 							// This should now contain our trackID
 							String trackID = controlTokens.nextToken();
-							this.audioTrackID = Integer.parseInt(trackID.substring(8, 9));	
+							
+							// Look for the key trackID or stream and adjust accordingly
+							if (trackID.indexOf("trackID=") != -1) {
+								this.audioTrackID = Integer.parseInt(trackID.substring(8, 9));
+								this.trackIDOrStream = true;
+							}
+							else if (trackID.indexOf("stream") != -1) {
+								this.audioTrackID = Integer.parseInt(trackID.substring(7, 8));
+								this.trackIDOrStream = false;
+							}							
+	
 							System.out.println("*** Audio Track: " + audioTrackID);
 							numberOfTracks++;
 							
@@ -535,7 +677,14 @@ public class RTSPControl {
 						else if (part.equals("m=video") && videoTrackID == -1) { // begin if2
 							// Skip next token
 							tokens.nextToken();
+							
+							// Obtain the streaming protocol for the Audio
+							// Usually RTP/AVP							
 							streamingProtocolVideo = new String(tokens.nextToken());
+							
+							// Next token should contain our payload type
+							videoPT = Integer.parseInt(tokens.nextToken());
+							System.out.println("*** Video PT: " + videoPT);							
 							
 							// Now advance each line until we hit "a=control"
 							while (true) { // begin while2
@@ -556,7 +705,17 @@ public class RTSPControl {
 							controlTokens.nextToken();
 							// This should now contain our trackID
 							String trackID = controlTokens.nextToken();
-							this.videoTrackID = Integer.parseInt(trackID.substring(8, 9));
+							
+							// Look for the key trackID or stream and adjust accordingly							
+							if (trackID.indexOf("trackID=") != -1) {
+								this.videoTrackID = Integer.parseInt(trackID.substring(8, 9));
+								this.trackIDOrStream = true;
+							}
+							else if (trackID.indexOf("stream") != -1) {
+								this.videoTrackID = Integer.parseInt(trackID.substring(7, 8));
+								this.trackIDOrStream = false;
+							}
+							
 							System.out.println("*** Video Track: " + videoTrackID);
 							numberOfTracks++;
 							
@@ -565,8 +724,8 @@ public class RTSPControl {
 						} // end if2
 						
 						// Extract the Session ID for subsequent setups
-						else if (part.equals("Session") && RTSPSessionID == -1) { // begin if2
-							this.RTSPSessionID = Integer.parseInt(tokens.nextToken());
+						else if (part.equals("Session") && RTSPSessionID == null) { // begin if2
+							this.RTSPSessionID = tokens.nextToken();
 							System.out.println("*** Session ID: " + RTSPSessionID);							
 							// Break out of this loop and continue reading other lines
 							break;
@@ -611,18 +770,33 @@ public class RTSPControl {
 		// This handles actual strings we are going to send to the server
 		switch(request) {
 		case SETUP:
-			// We should set up the video track first
 			if (videoSetupDone && audioSetupDone)
 				System.out.println("Setup already established");
 			else {
 				try {
+					// Set up video track if we haven't done it yet
 					if (videoTrackID != -1 && !videoSetupDone) {
 						System.out.println("*** Setting up Video Track: ");
-						stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
-								"/" + videoFile + "/trackID=" + videoTrackID + " RTSP/1.0" + CRLF);
+						if (this.trackIDOrStream) {
+							if (videoFile != null)
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/" + videoFile + "/trackID=" + videoTrackID + " RTSP/1.0" + CRLF);
+							else
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/trackID=" + videoTrackID + " RTSP/1.0" + CRLF);								
+						}
+						else {
+							if (videoFile != null)
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/" + videoFile + "/stream=" + videoTrackID + " RTSP/1.0" + CRLF);
+							else
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										 "/stream=" + videoTrackID + " RTSP/1.0" + CRLF);								
+						}
+							
 						stringToSend.append("CSeq: " + RTSPSeqNb + CRLF);
 						
-						if (RTSPSessionID != -1)
+						if (RTSPSessionID != null)
 							stringToSend.append("Session: " + RTSPSessionID + CRLF);
 						
 						stringToSend.append("Transport: " + streamingProtocolVideo + ";unicast;client_port=" + 
@@ -637,11 +811,27 @@ public class RTSPControl {
 					// After, set up the audio track
 					else if (audioTrackID != -1 && !audioSetupDone) {
 						System.out.println("*** Setting up Audio Track: ");
-						stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
-								"/" + videoFile + "/trackID=" + audioTrackID + " RTSP/1.0" + CRLF);
+						if (this.trackIDOrStream) {
+							if (videoFile != null)
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/" + videoFile + "/trackID=" + audioTrackID + " RTSP/1.0" + CRLF);
+							else
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										 "/trackID=" + audioTrackID + " RTSP/1.0" + CRLF);								
+						}
+						else {
+							if (videoFile != null)
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/" + videoFile + "/stream=" + audioTrackID + " RTSP/1.0" + CRLF);
+							else
+								stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+										"/stream=" + audioTrackID + " RTSP/1.0" + CRLF);
+							
+						}
+							
 						stringToSend.append("CSeq: " + RTSPSeqNb + CRLF);
 						
-						if (RTSPSessionID != -1)
+						if (RTSPSessionID != null)
 							stringToSend.append("Session: " + RTSPSessionID + CRLF);	
 						
 						stringToSend.append("Transport: " + streamingProtocolAudio + ";unicast;client_port=" + 
@@ -660,15 +850,20 @@ public class RTSPControl {
 			break;
 		case DESCRIBE: // Make sure we call DESCRIBE first
 		case PLAY: // Case when we wish to issue a PLAY request
-		case PAUSE: // Same for PAUSE and TEARDOWN
-		case TEARDOWN: // Also same for OPTIONS
-		case OPTIONS:
+		case PAUSE: // Same for PAUSE
+		case TEARDOWN: // Also same for TEARDOWN
+		case OPTIONS: // Also same for OPTIONS
 			try {
-				stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
-						"/" + videoFile + " RTSP/1.0" + CRLF);
+				if (videoFile != null)
+					stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+							"/" + videoFile + " RTSP/1.0" + CRLF);
+				else
+					stringToSend.append(requestType + " rtsp://" + hostName + ":" + serverPort + 
+							"/ RTSP/1.0" + CRLF);
+					
 				// Send sequence number
 				// If there is no session ID, this is the last thing we send 
-				if (RTSPSessionID == -1)
+				if (RTSPSessionID == null)
 					stringToSend.append("CSeq: " + RTSPSeqNb + CRLF + CRLF);
 				// Send session number if applicable
 				else {
@@ -688,6 +883,15 @@ public class RTSPControl {
 			throw new RuntimeException("Invalid Client State");
 		}
  	}
+	
+	// This timer task gets invoked every so often to ensure that the connection
+	// is still alive and doesn't time out
+	private class RTSPOptionsTimerTask extends TimerTask {
+		@Override
+		public void run() {
+			RTSPOptions();
+		}
+	}
 	
 	// Task that gets invoked after every 20 msec
 	private class RTSPTimerTask extends TimerTask {
@@ -730,10 +934,12 @@ public class RTSPControl {
 	}
 	
 	// Convenience method to convert a byte array into a string
+	// Source: http://stackoverflow.com/a/9855338/3250829
+	// Tests shown to be the fastest conversion routine available
+	// beating all other built-in ones in the Java API
 	
-	//private String bytesToHex(byte[] bytes) {
-	//	return bytesToHex(bytes, bytes.length);
-	//}
+	// For our byte to hex conversion routine
+	final char[] hexArray = "0123456789ABCDEF".toCharArray();
 	
 	private String bytesToHex(byte[] bytes, int length) {
 	    char[] hexChars = new char[length * 2];
@@ -744,4 +950,8 @@ public class RTSPControl {
 	    }
 	    return new String(hexChars);
 	}
+	
+	//private String bytesToHex(byte[] bytes) {
+	//	return bytesToHex(bytes, bytes.length);
+	//}	
 }

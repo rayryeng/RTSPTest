@@ -87,15 +87,20 @@ public class RTSPTest implements ActionListener{
 		// Add listener so that we quit we close the window
 	    mainFrame.addWindowListener(new WindowAdapter() {
 	        public void windowClosing(WindowEvent e) {
+	        	// Teardown the connection when we close the window
+	        	if (rtspControl != null) {
+	        		rtspControl.RTSPTeardown();
+	        		rtspControl.resetParameters(); // Just in case
+	        	}
 	        	System.exit(0);
 	        }
 	     });		
 
 		// Set up connection to default RTSP url before we even show GUI
-		hostName = "184.72.239.149";
-		portNumber = 554;
-		videoFile = "vod/mp4:BigBuckBunny_115k.mov";
-		rtspControl = new RTSPControl(hostName, portNumber, videoFile);
+		//hostName = "184.72.239.149";
+		//portNumber = 554;
+		//videoFile = "vod/mp4:BigBuckBunny_115k.mov";
+		//rtspControl = new RTSPControl(hostName, portNumber, videoFile);
 	    	    
 		// Create frame and show
 		mainFrame.getContentPane().add(mainPanel, BorderLayout.CENTER);
@@ -175,6 +180,6 @@ public class RTSPTest implements ActionListener{
 	}
 	
 	public static void main(String[] args) {
-		RTSPTest rtspTest = new RTSPTest();
+		new RTSPTest();
 	}
 }
