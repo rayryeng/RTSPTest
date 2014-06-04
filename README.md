@@ -58,7 +58,7 @@ The purpose of `DESCRIBE` is to be able to *describe* the information about the 
 
     v=0
     o=- 435048744 435048744 IN IP4 184.72.239.149
-    s=BigBuckBunny_115k.mov
+    s=BigBuckBunny_115k.movs
     c=IN IP4 184.72.239.149
     t=0 0
     a=sdplang:en
@@ -76,7 +76,7 @@ The purpose of `DESCRIBE` is to be able to *describe* the information about the 
     a=framerate:24.0
     a=control:trackID=2
 
-Basically, the first chunk of text gives you information about when you have accessed the data as well as some general information about it.  What is important is the very first line: `RTSP/1.0 200 OK`.  A server response code of `200` means that everything is working fine.  Anything else you should consider it as being an error.  The second chunk of text gives you information about the media you are trying to access.  What is important are the `m=video` and `m=audio` tags.  What follows each of these tags are information about the audio or video data within the content you are trying to stream.  As you can see, the video standard used for the content is H.264, while the audio is MP4.  It is also important to see that where the tags `a=control` are, this tells you the `trackID` or basically which "channel" we need to access either the audio or video data.  More information about the SDP protocol can [be found here](http://en.wikipedia.org/wiki/Session_Description_Protocol).  There is more important information about the video and audio tracks, but the current implementation does not extract this information.   On future versions, this information will inevitably be extracted to allow for actual media playback.
+Basically, the first chunk of text gives you information about when you have accessed the data as well as some general information about it.  What is important is the very first line: `RTSP/1.0 200 OK`.  A server response code of `200` means that everything is working fine.  Anything else you should consider it as being an error.  The second chunk of text gives you information about the media you are trying to access.  What is important are the `m=video` and `m=audio` tags.  What follows each of these tags are information about the audio or video data within the content you are trying to stream.  As you can see, the video standard used for the content is H.264, while the audio is MP4.  It is also important to see that where the tags `a=control` are, this tells you the `trackID` or basically which "channel" we need to access either the audio or video data.  More information about the SDP protocol can [be found here](http://en.wikipedia.org/wiki/Session_Description_Protocol).  Another way that this can be specified is if there is a `stream` tag instead of `trackID`.  This is essentially the same thing.  There is more important information about the video and audio tracks, but the current implementation does not extract this information.   On future versions, this information will inevitably be extracted to allow for actual media playback.
 
 ## OPTIONS
 
@@ -179,7 +179,7 @@ The `DESCRIBE` command is what is usually sent first.  The way you structure the
     
 The `\r\n` denote a carriage return and new line for each line.  You would actually write this into the string chunk.  The above is the **string** representation of what you would actually send to the server.  Each character would be sent as one byte (converted into ASCII) over to the server.  Bear in mind that these bytes have to be sent in big-endian (network byte order).  The Java Virtual Machine already handles this for us so there is no need to do any byte re-ordering.  Also take note of the `CSeq: 1` string.  This is known as a **Command Sequence** number, which keeps track of how many commands we have sent to the server so far.  As can be seen, this is just the first command.  For each command we send, this number needs to be incremented by 1.
 
-When the `DESCRIBE` response is received from the server, a **Session** ID is issued.  This **Session** ID needs to be part of subsequent messages sent to the server.
+When the `DESCRIBE` response is received from the server, a **Session** ID is issued.  This **Session** ID needs to be part of subsequent messages sent to the server.  This can consist of both letters and numbers.
 
 ## OPTIONS
 
@@ -258,6 +258,8 @@ Once you have this established, the Datagram Socket connection is all done under
 
 When `PLAY` is invoked, within the `RTSPControl` class, a `Timer` event gets initiated and every 20 milliseconds, media data packets are read from port 9000.  These data packets are simply stored into a `Byte` buffer and displayed on the screen in hexidecimal format.  In terms of using the actual data itself, this has not been implemented as different media protocols structure their media packets differently.  It will actually be up to you to parse through the data yourself and extract the meaningful data.
 
+Also, as an additional feature, we keep the connection to the RTSP server alive by periodically sending an innocuous `OPTIONS` request.  This way if you try to send a command to the server, this avoids any connection timeouts.  
+
 To compile the library, simply do:
 
     javac RTSPControl.java
@@ -269,7 +271,7 @@ All you have to do is compile the source, then run the code:
     javac RTSPTest.java
     java RTSPTest
     
-Once you run it, you will be provided with a simple interface where you can enter in a RTSP URL, as well as various buttons to select that issues the aforementioned RTSP commands.  Simply follow the workflow that has been laid out previously.  When you run the RTSP test GUI, a TCP connection will be established to the Wowza RTSP test server that was mentioned previously, and the text field will already be populated with this GUI.  When you eventually get to the `PLAY` command, you will see the bytes written to the screen as well as how many bytes were written at each reading of the port where the media data packets are coming in.
+Once you run it, you will be provided with a simple interface where you can enter in a RTSP URL, as well as various buttons to select that issues the aforementioned RTSP commands.  Simply follow the workflow that has been laid out previously.  When you run the RTSP test GUI, the text field will already be populated with the RTSP URL to the test Wowza server.  In order to create a connection to the server, you need to push ENTER when the text field has focus, **even with the default text in the field**.  When you eventually get to the `PLAY` command, you will see the bytes written to the screen as well as how many bytes were written at each reading of the port where the media data packets are coming in.
 
 # References
 
