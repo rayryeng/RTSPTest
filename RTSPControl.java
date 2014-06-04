@@ -15,8 +15,10 @@ import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.TimerTask;
 
+// Test application that communicates with 
 public class RTSPControl {
-	// RTP Variables	
+	// RTP Variables
+	
 	// UDP packet received from server
 	private DatagramPacket rcvdp = null;
 	// Socket used to send and receive UDP packets
@@ -100,7 +102,6 @@ public class RTSPControl {
 	
 	// For our byte to hex conversion routine
 	final char[] hexArray = "0123456789ABCDEF".toCharArray();
-
 	// Constructor
 	// serverHost - Alphabetical URL or IP Address
 	// etc. www.bublcam.com or 192.168.0.100
@@ -159,9 +160,6 @@ public class RTSPControl {
 		setUpConnectionAndParameters();
 	}
 	
-
-	///// Standard getter and setter methods
-
 	public String getRTSPURL() {
 		return new String(hostName);
 	}
@@ -732,7 +730,6 @@ public class RTSPControl {
 	}
 	
 	// Convenience method to convert a byte array into a string
-	// Source: http://stackoverflow.com/a/9855338/3250829
 	
 	//private String bytesToHex(byte[] bytes) {
 	//	return bytesToHex(bytes, bytes.length);
