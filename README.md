@@ -8,6 +8,7 @@ This is a library as well as a test GUI that I wrote that implements the RTSP Si
 ## Version History
 
 * Version 1.0 - June 3rd, 2014 - Initial Creation
+* Version 1.1 - August 25th, 2015 - Fix on searching for track IDs (thanks to galbarm)
 
 # Synopsis
 
@@ -88,7 +89,7 @@ This pretty much tells you what *commands* are available to you to send to the s
     Server: Wowza Media Server 3.6.4.04 build11295
     Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, OPTIONS, ANNOUNCE, RECORD, GET_PARAMETER
     Cache-Control: no-cache
-    
+
 What is important is where the `Public:` field is.  These are all of the available commands that we can issue to the server.  As you can see, the 6 big ones that are in the list above are in this chunk of text.
 
 ## SETUP
@@ -103,7 +104,7 @@ What the `SETUP` command does is that we need to establish a connection to the s
     Cseq: 2
     Server: Wowza Media Server 3.6.4.04 build11295
     Cache-Control: no-cache
-    
+
     RTSP/1.0 200 OK
     Date: Mon, 2 Jun 2014 23:59:19 UTC
     Transport: RTP/AVP;unicast;client_port=9000-9001;source=184.72.239.149;server_port=8230-8231;ssrc=652A0475
@@ -112,7 +113,7 @@ What the `SETUP` command does is that we need to establish a connection to the s
     Cseq: 3
     Server: Wowza Media Server 3.6.4.04 build11295
     Cache-Control: no-cache
-    
+
 Note that both of the string chunks are more or less the same.  The **only** difference is the `server_port`.
 
 ## PLAY
@@ -126,7 +127,7 @@ When we issue a `PLAY` command, this is when we start obtaining media packets.  
     RTP-Info: url=rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=1;seq=1;rtptime=0,url=rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov/trackID=2;seq=1;rtptime=0
     Server: Wowza Media Server 3.6.4.04 build11295
     Cache-Control: no-cache
-    
+
 This simply displays what audio and video tracks we are trying to access.
 
 ## PAUSE
@@ -176,7 +177,7 @@ The `DESCRIBE` command is what is usually sent first.  The way you structure the
     DESCRIBE rtsp://184.72.239.149:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n
     CSeq: 1\r\n
     \r\n
-    
+
 The `\r\n` denote a carriage return and new line for each line.  You would actually write this into the string chunk.  The above is the **string** representation of what you would actually send to the server.  Each character would be sent as one byte (converted into ASCII) over to the server.  Bear in mind that these bytes have to be sent in big-endian (network byte order).  The Java Virtual Machine already handles this for us so there is no need to do any byte re-ordering.  Also take note of the `CSeq: 1` string.  This is known as a **Command Sequence** number, which keeps track of how many commands we have sent to the server so far.  As can be seen, this is just the first command.  For each command we send, this number needs to be incremented by 1.
 
 When the `DESCRIBE` response is received from the server, a **Session** ID is issued.  This **Session** ID needs to be part of subsequent messages sent to the server.  This can consist of both letters and numbers.
@@ -189,7 +190,7 @@ The `OPTIONS` command looks like the following.  You can do either `DESCRIBE` or
     CSeq: 2\r\n
     Session: 1234567890\r\n
     \r\n
-    
+
 ## SETUP
 
 The `SETUP` command looks like the following.  Bear in mind that we must issue a command **per media track** for setting up (i.e. one for video and one for audio).
@@ -215,7 +216,7 @@ The `PLAY` command looks like this, once we have finished `SETUP`:
     CSeq: 5\r\n
     Session: 1234567890\r\n
     \r\n
-    
+
 Starting to look the same isn't it?  As you can see so far, most of the commands follow the same structure.  The main difference is the command issued at the beginning of the first string.
 
 ## PAUSE
@@ -226,7 +227,7 @@ The `PAUSE` command looks like this, assuming that `PLAY` was issued before:
     CSeq: 6\r\n
     Session: 1234567890\r\n
     \r\n
-    
+
 ## TEARDOWN
 
 A `TEARDOWN` command looks like this, assuming that we are either in `PLAY` or `PAUSE`:
@@ -235,7 +236,7 @@ A `TEARDOWN` command looks like this, assuming that we are either in `PLAY` or `
     CSeq: 7\r\n
     Session: 1234567890\r\n
     \r\n
-    
+
 Bear in mind that once you issue a `TEARDOWN` request, you need to reset the `CSeq` counter so that it starts at 1.
 
 # How to use the library
@@ -258,7 +259,7 @@ Once you have this established, the Datagram Socket connection is all done under
 
 When `PLAY` is invoked, within the `RTSPControl` class, a `Timer` event gets initiated and every 20 milliseconds, media data packets are read from port 9000.  These data packets are simply stored into a `Byte` buffer and displayed on the screen in hexidecimal format.  In terms of using the actual data itself, this has not been implemented as different media protocols structure their media packets differently.  It will actually be up to you to parse through the data yourself and extract the meaningful data.
 
-Also, as an additional feature, we keep the connection to the RTSP server alive by periodically sending an innocuous `OPTIONS` request.  This way if you try to send a command to the server, this avoids any connection timeouts.  
+Also, as an additional feature, we keep the connection to the RTSP server alive by periodically sending an innocuous `OPTIONS` request.  This way if you try to send a command to the server, this avoids any connection timeouts.
 
 To compile the library, simply do:
 
@@ -270,7 +271,7 @@ All you have to do is compile the source, then run the code:
 
     javac RTSPTest.java
     java RTSPTest
-    
+
 Once you run it, you will be provided with a simple interface where you can enter in a RTSP URL, as well as various buttons to select that issues the aforementioned RTSP commands.  Simply follow the workflow that has been laid out previously.  When you run the RTSP test GUI, the text field will already be populated with the RTSP URL to the test Wowza server.  In order to create a connection to the server, you need to push ENTER when the text field has focus, **even with the default text in the field**.  When you eventually get to the `PLAY` command, you will see the bytes written to the screen as well as how many bytes were written at each reading of the port where the media data packets are coming in.
 
 # References
