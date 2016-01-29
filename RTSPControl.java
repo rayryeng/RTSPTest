@@ -668,7 +668,7 @@ public class RTSPControl {
               }
               ///// Fix thanks to galbarm
               else if (trackID.indexOf("track") != -1) {
-                this.audioTrackID = Integer.parseInt(trackID.substring(6, 7));
+                this.audioTrackID = Integer.parseInt(trackID.substring((trackID.indexOf("track")+"track".length()),trackID.length()));
                 this.trackIDOrStream = true;
                 this.galbarmFlag = true;
               }
