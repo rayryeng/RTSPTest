@@ -668,7 +668,7 @@ public class RTSPControl {
               }
               ///// Fix thanks to galbarm
               else if (trackID.indexOf("track") != -1) {
-                this.audioTrackID = Integer.parseInt(trackID.substring(6, 7));
+                this.audioTrackID = Integer.parseInt(trackID.substring((trackID.indexOf("track")+5),trackID.length()));// 5, here is length of track i.e, "track".length()
                 this.trackIDOrStream = true;
                 this.galbarmFlag = true;
               }
@@ -723,7 +723,7 @@ public class RTSPControl {
               }
               ///// Fix thanks to galbarm
               else if (trackID.indexOf("track") != -1) {
-                this.videoTrackID = Integer.parseInt(trackID.substring(6, 7));
+                this.videoTrackID = Integer.parseInt(trackID.substring((trackID.indexOf("track")+5),trackID.length()));// 5, here is length of track i.e, "track".length()
                 this.galbarmFlag = true;
                 this.trackIDOrStream = true;
               }
