@@ -8,7 +8,8 @@ This is a library as well as a test GUI that I wrote that implements the RTSP Si
 ## Version History
 
 * Version 1.0 - June 3rd, 2014 - Initial Creation
-* Version 1.1 - August 25th, 2015 - Fix on searching for track IDs (thanks to galbarm)
+* Version 1.1 - August 25th, 2015 - Fix on searching for track IDs (thanks to [`@galbarm`](https://github.com/galbarm))
+* Version 1.2 - February 1st, 2016 - Further fix on searching for track IDs (thanks to [`@abhijeetbhanjadeo`](https://github.com/abhijeetbhanjadeo))
 
 # Synopsis
 
